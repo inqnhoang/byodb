@@ -57,9 +57,12 @@ func (tree *BTree) Delete(key []byte) bool {
 	if len(node) == 0 {
 		return false
 	}
+	tree.del(tree.root)
 
-	if node.btype() == BNODE_NODE && node.nkeys() == 1 {
-		tree.root = node.getPtr(0) // if root only has one child, just make that child the root
+	if node.btype() == BNODE_LEAF && node.nkeys() == 1 { // reset btree
+		tree.root = 0
+	} else if node.btype() == BNODE_NODE && node.nkeys() == 1 { // if root only has one child, just make that child the root
+		tree.root = node.getPtr(0)
 	} else {
 		tree.root = tree.new(node)
 	}

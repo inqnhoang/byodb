@@ -34,13 +34,13 @@ func (node BNode) setHeader(btype uint16, nkeys uint16) {
 }
 
 func (node BNode) getPtr(idx uint16) uint64 {
-	assert(0 < idx && idx < node.nkeys(), "getPtr")
+	assert(idx < node.nkeys(), "getPtr")
 	pos := HEADER + 8*idx
 	return binary.LittleEndian.Uint64(node[pos:])
 }
 
 func (node BNode) setPtr(idx uint16, val uint64) {
-	assert(0 < idx && idx < node.nkeys(), "setPtr")
+	assert(idx < node.nkeys(), "setPtr")
 	pos := HEADER + 8*idx
 	binary.LittleEndian.PutUint64(node[pos:], val)
 }
@@ -61,7 +61,7 @@ func (node BNode) setOffset(idx uint16, offset uint16) {
 	if idx == 0 {
 		return
 	}
-	offsetPos := node.getOffset(idx)
+	offsetPos := node.offsetPos(idx)
 	binary.LittleEndian.PutUint16(node[offsetPos:], offset)
 }
 
@@ -162,7 +162,7 @@ func nodeAppendRange(new BNode, old BNode, dstNew uint16, srcOld uint16, n uint1
 func leafInsert(new BNode, old BNode, idx uint16, key []byte, val []byte) {
 	new.setHeader(BNODE_LEAF, old.nkeys()+1)
 
-	nodeAppendRange(new, old, 0, 0, idx-1)
+	nodeAppendRange(new, old, 0, 0, idx)
 	nodeAppendKV(new, idx, 0, key, val)
 	nodeAppendRange(new, old, idx+1, idx, old.nkeys()-idx)
 }
@@ -208,7 +208,7 @@ func nodeSplit2(left BNode, right BNode, old BNode) {
 	nodeAppendRange(left, old, 0, 0, found)
 
 	right.setHeader(old.btype(), old.nkeys()-found)
-	nodeAppendRange(right, old, found+1, found, old.nkeys()-found)
+	nodeAppendRange(right, old, 0, found, old.nkeys()-found)
 }
 
 func nodeSplit3(old BNode) (uint16, [3]BNode) {
@@ -329,7 +329,7 @@ func nodeDelete(tree *BTree, node BNode, idx uint16, key []byte) BNode {
 		nodeReplace2Kid(new, node, idx-1, tree.new(merged), merged.getKey(0))
 	case mergeDir > 0:
 		merged := BNode(make([]byte, BTREE_PAGE_SIZE))
-		nodeMerge(merged, sibling, updated)
+		nodeMerge(merged, updated, sibling)
 		tree.del(node.getPtr(idx + 1))
 		nodeReplace2Kid(new, node, idx, tree.new(merged), merged.getKey(0))
 	case mergeDir == 0 && updated.nkeys() == 0:
