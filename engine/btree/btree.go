@@ -13,6 +13,13 @@ type BTree struct {
 	del func(uint64)
 }
 
+func (tree *BTree) Get(key []byte) ([]byte, bool) {
+	if tree.root == 0 {
+		return BNode{}, false
+	}
+	return treeGet(tree, tree.get(tree.root), key)
+}
+
 // insertion into tree by building new nodes for the path it goes on
 func (tree *BTree) Insert(key []byte, val []byte) {
 	// base case: root

@@ -119,6 +119,25 @@ func nodeLookupLE(node BNode, key []byte) uint16 {
 	return found
 }
 
+func treeGet(tree *BTree, node BNode, key []byte) ([]byte, bool) {
+	idx := nodeLookupLE(node, key)
+	kptr := node.getPtr(idx)
+
+	switch node.btype() {
+	case BNODE_LEAF:
+		if bytes.Equal(key, node.getKey(idx)) {
+			return node.getVal(idx), true
+		} else {
+			return BNode{}, false
+		}
+	case BNODE_NODE:
+		treeGet(tree, tree.get(kptr), key)
+	default:
+		panic("Bad node!")
+	}
+	return BNode{}, false
+}
+
 // -----================-----
 // ---=====  Insert  =====---
 // -----================-----
