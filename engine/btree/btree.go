@@ -13,6 +13,18 @@ type BTree struct {
 	del func(uint64)
 }
 
+func (tree *BTree) SetGet(get func(uint64) []byte) {
+	tree.get = get
+}
+
+func (tree *BTree) SetNew(new func([]byte) uint64) {
+	tree.new = new
+}
+
+func (tree *BTree) SetDel(del func(uint64)) {
+	tree.del = del
+}
+
 func (tree *BTree) Get(key []byte) ([]byte, bool) {
 	if tree.root == 0 {
 		return BNode{}, false
