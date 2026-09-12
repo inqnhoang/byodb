@@ -13,6 +13,14 @@ type BTree struct {
 	del func(uint64)
 }
 
+func (tree *BTree) GetRoot() uint64 {
+	return tree.root
+}
+
+func (tree *BTree) SetRoot(root uint64) {
+	tree.root = root
+}
+
 func (tree *BTree) SetGet(get func(uint64) []byte) {
 	tree.get = get
 }
