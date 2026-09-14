@@ -12,6 +12,12 @@ import (
 
 const DB_SIG = "BuildYourOwnDB06"
 
+func assert(cond bool, caller string) {
+	if !cond {
+		panic(fmt.Sprintf("assertion failed: %s", caller))
+	}
+}
+
 // -----=================-----
 // ---=====  KvStore  =====---
 // -----=================-----
@@ -20,6 +26,7 @@ type KV struct {
 	Path string // file path
 	fd   int    // file descriptor
 	tree *btree.BTree
+	free FreeList
 
 	mmap struct {
 		total  int // virtual addresses mapped (flushed & not-backed)
@@ -27,8 +34,9 @@ type KV struct {
 	}
 	// whole multi-page operation
 	page struct {
-		flushed uint64 // # of pages flushed to disk
-		temp    [][]byte
+		flushed uint64            // # of pages flushed to disk
+		temp    [][]byte          // pages queue
+		updates map[uint64][]byte // pending updates, including appended pages
 	}
 
 	failed bool // Did last update fail?
@@ -53,6 +61,7 @@ func (db *KV) Del(key []byte) (bool, error) {
 // ---=====  Mmap  =====---
 // -----==============-----
 
+// extends capacity of mmap
 func extendMmap(db *KV, size int) error {
 	if size <= db.mmap.total {
 		return nil
@@ -78,6 +87,7 @@ func extendMmap(db *KV, size int) error {
 // ---=====  Pages  =====---
 // -----===============-----
 
+// flush pages queue to disk
 func writePages(db *KV) error {
 	// extend mmap if needed
 	// flushed + queue size
@@ -96,8 +106,7 @@ func writePages(db *KV) error {
 	return nil
 }
 
-// virtual address
-func (db *KV) pageRead(ptr uint64) []byte {
+func (db *KV) pageReadFile(ptr uint64) []byte {
 	start := uint64(0)
 	for _, chunk := range db.mmap.chunks {
 		end := start + uint64(len(chunk))/btree.BTREE_PAGE_SIZE // page mapping
@@ -110,18 +119,48 @@ func (db *KV) pageRead(ptr uint64) []byte {
 	panic("bad ptr!")
 }
 
+// reads a page using a logical pointer
+func (db *KV) pageRead(ptr uint64) []byte {
+	if node, ok := db.page.updates[ptr]; ok {
+		return node
+	}
+	return db.pageReadFile(ptr)
+}
+
+// appends a page to queue
 func (db *KV) pageAppend(node []byte) uint64 {
 	ptr := db.page.flushed + uint64(len(db.page.temp))
 	db.page.temp = append(db.page.temp, node)
 	return ptr
 }
 
+// allocates a page
+func (db *KV) pageAlloc(node []byte) uint64 {
+	// check for recycled
+	if ptr := db.free.PopHead(); ptr != 0 {
+		db.page.updates[ptr] = node
+		return ptr
+	}
+	// otherwise append
+	return db.pageAppend(node)
+}
+
+func (db *KV) pageWrite(ptr uint64) []byte {
+	if node, ok := db.page.updates[ptr]; ok {
+		return node
+	}
+	node := make([]byte, btree.BTREE_PAGE_SIZE)
+	copy(node, db.pageReadFile(ptr))
+	db.page.updates[ptr] = node
+	return node
+}
+
 // -----==============-----
 // ---=====  Meta  =====---
 // -----==============-----
 
-// | sig | root_ptr | page_used |
-// | 16B |    8B    |     8B    |
+// | sig | root_ptr | page_used | head_page | head_seq | tail_page | tail_seq |
+// | 16B |    8B    |     8B    |     8B    |    8B    |     8B    |    8B    |
 func saveMeta(db *KV) []byte {
 	var data [32]byte
 	copy(data[:16], []byte(DB_SIG))
@@ -137,12 +176,18 @@ func loadMeta(db *KV, data []byte) error {
 	root := binary.LittleEndian.Uint64(data[16:])
 	db.tree.SetRoot(root)
 	db.page.flushed = binary.LittleEndian.Uint64(data[24:])
+	db.free.headPage = binary.LittleEndian.Uint64(data[32:])
+	db.free.headSeq = binary.LittleEndian.Uint64(data[40:])
+	db.free.tailPage = binary.LittleEndian.Uint64(data[48:])
+	db.free.tailSeq = binary.LittleEndian.Uint64(data[56:])
 	return nil
 }
 
 func readRoot(db *KV, filesize uint64) error {
 	if filesize == 0 {
 		db.page.flushed = 1 // meta page
+		db.free.headPage = 1
+		db.free.tailPage = 1
 		return nil
 	}
 	data := db.mmap.chunks[0]
@@ -176,6 +221,7 @@ func updateFile(db *KV) error {
 		return err
 	}
 
+	db.free.SetMaxSeq()
 	return syscall.Fsync(db.fd)
 }
 
@@ -207,7 +253,11 @@ func updateOrRevert(db *KV, meta []byte) error {
 
 func (db *KV) Open() error {
 	db.tree.SetGet(db.pageRead)
-	db.tree.SetNew(db.pageAppend)
-	db.tree.SetDel(func(uint64) {})
+	db.tree.SetNew(db.pageAlloc)
+	db.tree.SetDel(db.free.PushTail)
+
+	db.free.get = db.pageRead
+	db.free.new = db.pageAppend
+	db.free.set = db.pageWrite
 	return nil
 }
