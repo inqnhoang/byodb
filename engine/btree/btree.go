@@ -94,3 +94,17 @@ func (tree *BTree) Delete(key []byte) bool {
 	}
 	return true
 }
+
+func (tree *BTree) Seek(key []byte) *BIter
+
+func (tree *BTree) SeekLe(key []byte) *BIter {
+	iter := &BIter{tree: tree}
+	for ptr := tree.root; ptr != 0; {
+		node := BNode(tree.get(ptr))
+		idx := nodeLookupLE(node, key)
+		iter.path = append(iter.path, node)
+		iter.pos = append(iter.pos, idx)
+		ptr = node.getPtr(idx)
+	}
+	return iter
+}
