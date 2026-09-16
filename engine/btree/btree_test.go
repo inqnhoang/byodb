@@ -43,7 +43,7 @@ func newC() *C {
 }
 
 func (c *C) add(key string, val string) {
-	c.tree.Insert([]byte(key), []byte(val))
+	c.tree.Insert([]byte(key), []byte(val), MODE_UPSERT)
 	c.ref[key] = val
 }
 

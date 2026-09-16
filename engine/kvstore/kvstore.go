@@ -36,7 +36,7 @@ type KV struct {
 	page struct {
 		flushed uint64            // # of pages flushed to disk
 		temp    [][]byte          // pages queue
-		updates map[uint64][]byte // pending updates, including appended pages
+		updates map[uint64][]byte // pending updates
 	}
 
 	failed bool // Did last update fail?
@@ -46,15 +46,27 @@ func (db *KV) Get(key []byte) ([]byte, bool) {
 	return db.tree.Get(key)
 }
 
-func (db *KV) Set(key []byte, val []byte) error {
+func (db *KV) Set(key []byte, val []byte, mode int) error {
 	meta := saveMeta(db)
-	db.tree.Insert(key, val)
+	db.tree.Insert(key, val, mode)
 	return updateOrRevert(db, meta)
 }
 
 func (db *KV) Del(key []byte) (bool, error) {
+	meta := saveMeta(db)
 	deleted := db.tree.Delete(key)
-	return deleted, updateFile(db)
+	return deleted, updateOrRevert(db, meta)
+}
+
+func (db *KV) Update(req btree.UpdateReq) (bool, error) {
+	if req.Key == nil {
+		return false, fmt.Errorf("Update: no key provided")
+	}
+	err := db.Set(req.Key, req.Val, req.Mode)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // -----==============-----
@@ -162,10 +174,14 @@ func (db *KV) pageWrite(ptr uint64) []byte {
 // | sig | root_ptr | page_used | head_page | head_seq | tail_page | tail_seq |
 // | 16B |    8B    |     8B    |     8B    |    8B    |     8B    |    8B    |
 func saveMeta(db *KV) []byte {
-	var data [32]byte
+	var data [64]byte
 	copy(data[:16], []byte(DB_SIG))
 	binary.LittleEndian.PutUint64(data[16:], db.tree.GetRoot())
 	binary.LittleEndian.PutUint64(data[24:], db.page.flushed)
+	binary.LittleEndian.PutUint64(data[32:], db.free.headPage)
+	binary.LittleEndian.PutUint64(data[40:], db.free.headSeq)
+	binary.LittleEndian.PutUint64(data[48:], db.free.tailPage)
+	binary.LittleEndian.PutUint64(data[56:], db.free.tailSeq)
 	return data[:]
 }
 

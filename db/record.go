@@ -88,6 +88,28 @@ func encodeKey(out []byte, prefix uint32, vals []Value) []byte {
 	return out
 }
 
+func encodeValues(out []byte, vals []Value) []byte {
+	for _, val := range vals {
+		switch val.Type {
+		case TYPE_INT64:
+			var b [8]byte
+			binary.LittleEndian.AppendUint64(b[:], uint64(val.I64))
+			out = append(out, b[:]...)
+
+		// | size | str |
+		// |  4B  | ... |
+		case TYPE_BYTES:
+			var b [4]byte
+			binary.LittleEndian.PutUint32(b[:], uint32(len(val.Str)))
+			out = append(out, b[:]...)
+			out = append(out, val.Str...)
+		default:
+			panic(fmt.Errorf("encodeValues: unknown type %d", val.Type))
+		}
+	}
+	return out
+}
+
 func decodeValues(in []byte, out []Value) {
 	offset := 0
 	for i, val := range out {

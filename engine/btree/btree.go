@@ -41,7 +41,7 @@ func (tree *BTree) Get(key []byte) ([]byte, bool) {
 }
 
 // insertion into tree by building new nodes for the path it goes on
-func (tree *BTree) Insert(key []byte, val []byte) {
+func (tree *BTree) Insert(key []byte, val []byte, mode int) {
 	// base case: root
 	if tree.root == 0 {
 		root := BNode(make([]byte, BTREE_PAGE_SIZE))
@@ -50,11 +50,10 @@ func (tree *BTree) Insert(key []byte, val []byte) {
 		nodeAppendKV(root, 0, 0, nil, nil)
 		nodeAppendKV(root, 1, 0, key, val)
 		tree.root = tree.new(root)
-		return
 	}
 
 	// recursively handled, returns root' and only root', children are handled in the recursive calls
-	node := treeInsert(tree, tree.get(tree.root), key, val)
+	node := treeInsert(tree, tree.get(tree.root), key, val, mode)
 
 	// check if root needs to get split
 	nsplit, split := nodeSplit3(node)

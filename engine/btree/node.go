@@ -252,29 +252,31 @@ func nodeSplit3(old BNode) (uint16, [3]BNode) {
 }
 
 // returns copy of the caller
-func treeInsert(tree *BTree, node BNode, key []byte, val []byte) BNode {
+func treeInsert(tree *BTree, node BNode, key []byte, val []byte, mode int) BNode {
 	new := BNode(make([]byte, 2*BTREE_PAGE_SIZE))
 
 	idx := nodeLookupLE(node, key)
 	switch node.btype() {
 	case BNODE_LEAF:
-		if bytes.Equal(key, node.getKey(idx)) {
+		if bytes.Equal(key, node.getKey(idx)) && (mode == MODE_UPDATE_ONLY || mode == MODE_UPSERT) {
 			leafUpdate(new, node, idx, key, val)
-		} else {
+		} else if mode == MODE_INSERT_ONLY || mode == MODE_UPSERT {
 			leafInsert(new, node, idx+1, key, val)
+		} else {
+			panic("Bad mode!")
 		}
 	case BNODE_NODE:
-		nodeInsert(tree, new, node, idx, key, val)
+		nodeInsert(tree, new, node, idx, key, val, mode)
+
 	default:
-		panic("bad node!")
+		panic("Bad Node!")
 	}
 	return new
 }
 
-// insertion into an internal node - handled recursively
-func nodeInsert(tree *BTree, new BNode, node BNode, idx uint16, key []byte, val []byte) {
+func nodeInsert(tree *BTree, new BNode, node BNode, idx uint16, key []byte, val []byte, mode int) {
 	kptr := node.getPtr(idx)
-	knode := treeInsert(tree, tree.get(kptr), key, val)
+	knode := treeInsert(tree, tree.get(kptr), key, val, mode)
 
 	nsplit, split := nodeSplit3(knode)
 	tree.del(kptr)

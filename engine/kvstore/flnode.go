@@ -4,6 +4,7 @@ package kvstore
 // |  8B  |   8B...  |
 type LNode []byte
 
+// TODO
 func (node LNode) getNext() uint64
 func (node LNode) setNext(next uint64)
 func (node LNode) getPtr(idx int) uint64
