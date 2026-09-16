@@ -1,8 +1,17 @@
 package btree
 
+import "fmt"
+
 const BTREE_PAGE_SIZE = 4096
 const BTREE_MAX_KEY_SIZE = 1000
 const BTREE_MAX_VAL_SIZE = 3000
+
+const (
+	CMP_GE = +3
+	CMP_GT = +2
+	CMP_LT = -2
+	CMP_LE = -3
+)
 
 type BTree struct {
 	root uint64 // pointer to a non-zero page number
@@ -35,7 +44,7 @@ func (tree *BTree) SetDel(del func(uint64)) {
 
 func (tree *BTree) Get(key []byte) ([]byte, bool) {
 	if tree.root == 0 {
-		return BNode{}, false
+		return nil, false
 	}
 	return treeGet(tree, tree.get(tree.root), key)
 }
@@ -50,6 +59,7 @@ func (tree *BTree) Insert(key []byte, val []byte, mode int) {
 		nodeAppendKV(root, 0, 0, nil, nil)
 		nodeAppendKV(root, 1, 0, key, val)
 		tree.root = tree.new(root)
+		return
 	}
 
 	// recursively handled, returns root' and only root', children are handled in the recursive calls
@@ -95,16 +105,42 @@ func (tree *BTree) Delete(key []byte) bool {
 	return true
 }
 
-func (tree *BTree) Seek(key []byte) *BIter
-
-func (tree *BTree) SeekLe(key []byte) *BIter {
+func treeSeek(tree *BTree, key []byte, lookup func(BNode, []byte) uint16) *BIter {
 	iter := &BIter{tree: tree}
 	for ptr := tree.root; ptr != 0; {
 		node := BNode(tree.get(ptr))
-		idx := nodeLookupLE(node, key)
+		idx := lookup(node, key)
+
+		if node.btype() == BNODE_LEAF {
+			break
+		}
+
+		if idx >= node.nkeys() {
+			break
+		}
 		iter.path = append(iter.path, node)
 		iter.pos = append(iter.pos, idx)
 		ptr = node.getPtr(idx)
 	}
 	return iter
+}
+
+func (tree *BTree) SeekGE(key []byte) *BIter { return treeSeek(tree, key, nodeLookupGE) }
+func (tree *BTree) SeekGT(key []byte) *BIter { return treeSeek(tree, key, nodeLookupGT) }
+func (tree *BTree) SeekLE(key []byte) *BIter { return treeSeek(tree, key, nodeLookupLE) }
+func (tree *BTree) SeekLT(key []byte) *BIter { return treeSeek(tree, key, nodeLookupLT) }
+
+func (tree *BTree) Seek(key []byte, cmp int) *BIter {
+	switch cmp {
+	case CMP_GE:
+		return tree.SeekGE(key)
+	case CMP_GT:
+		return tree.SeekGT(key)
+	case CMP_LE:
+		return tree.SeekLE(key)
+	case CMP_LT:
+		return tree.SeekLT(key)
+	default:
+		panic(fmt.Errorf("Seek: bad cmp %d", cmp))
+	}
 }

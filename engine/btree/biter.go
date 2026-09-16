@@ -16,7 +16,7 @@ func (iter *BIter) Deref() ([]byte, []byte) {
 func (iter *BIter) Valid() bool {
 	last := len(iter.pos) - 1
 	pos := iter.pos[last]
-	return pos < iter.path[last].nkeys()
+	return pos > 0 && pos < iter.path[last].nkeys()
 }
 
 func iterPrev(iter *BIter, level int) {

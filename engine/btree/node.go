@@ -102,6 +102,43 @@ func assert(cond bool, caller string) {
 // ---===== Lookups =====---
 // -----===============-----
 
+func nodeLookupGT(node BNode, key []byte) uint16 {
+	nkeys := node.nkeys()
+	for i := uint16(1); i < nkeys; i++ {
+		if bytes.Compare(node.getKey(i), key) > 0 {
+			return i
+		}
+	}
+	return nkeys
+}
+
+func nodeLookupGE(node BNode, key []byte) uint16 {
+	nkeys := node.nkeys()
+	for i := uint16(1); i < nkeys; i++ {
+		if bytes.Compare(node.getKey(i), key) >= 0 {
+			return i
+		}
+	}
+	return nkeys
+}
+
+func nodeLookupLT(node BNode, key []byte) uint16 {
+	nkeys := node.nkeys()
+	found := uint16(0)
+
+	for i := uint16(1); i < nkeys; i++ {
+		cmp := bytes.Compare(node.getKey(i), key)
+
+		if cmp < 0 {
+			found = i
+		}
+		if cmp >= 0 {
+			break
+		}
+	}
+	return found
+}
+
 func nodeLookupLE(node BNode, key []byte) uint16 {
 	nkeys := node.nkeys()
 	found := uint16(0)
