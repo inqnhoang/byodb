@@ -7,10 +7,13 @@ const (
 )
 
 type UpdateReq struct {
-	Mode int
+	tree *BTree
 
-	tree  *BTree
-	Added bool
-	Key   []byte
-	Val   []byte
+	Added   bool
+	Updated bool
+	Old     []byte
+
+	Key  []byte
+	Val  []byte
+	Mode int
 }

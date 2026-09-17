@@ -62,71 +62,51 @@ func checkRecord(tdef *TableDef, rec Record, n int) ([]Value, error) {
 	return vals, nil
 }
 
+// -----======================-----
+// ---===== Encode & Decode =====--
+// -----=======================----
+
+func escapeString(in []byte) []byte {
+	out := make([]byte, 0, len(in)+1)
+	for _, b := range in {
+		if b <= 1 {
+			out = append(out, 0x01, b+1)
+		} else {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+func unescapeString(in []byte) []byte
+
+// TODO
+func encodeValues(out []byte, vals []Value) []byte {
+	for _, v := range vals {
+		out = append(out, byte(v.Type))
+		switch v.Type {
+		case TYPE_INT64:
+			var buf [8]byte
+			u := uint64(v.I64) + (1 << 63)
+			binary.BigEndian.PutUint64(buf[:], u)
+			out = append(out, buf[:]...)
+		case TYPE_BYTES:
+			out = append(out, escapeString(v.Str)...)
+			out = append(out, 0)
+		default:
+			panic("what?")
+		}
+	}
+	return out
+}
+func decodeValues(in []byte, out []Value)
+
 func encodeKey(out []byte, prefix uint32, vals []Value) []byte {
 	var buf [4]byte
-	binary.LittleEndian.AppendUint32(buf[:], prefix)
+	binary.BigEndian.PutUint32(buf[:], prefix)
 	out = append(out, buf[:]...)
-
-	for _, val := range vals {
-		switch val.Type {
-		case TYPE_INT64:
-			var b [8]byte
-			binary.LittleEndian.AppendUint64(b[:], uint64(val.I64))
-			out = append(out, b[:]...)
-
-		// | size | str |
-		// |  4B  | ... |
-		case TYPE_BYTES:
-			var b [4]byte
-			binary.LittleEndian.PutUint32(b[:], uint32(len(val.Str)))
-			out = append(out, b[:]...)
-			out = append(out, val.Str...)
-		default:
-			panic(fmt.Errorf("encodeKey: unknown type %d", val.Type))
-		}
-	}
+	out = encodeValues(out, vals)
 	return out
 }
 
-func encodeValues(out []byte, vals []Value) []byte {
-	for _, val := range vals {
-		switch val.Type {
-		case TYPE_INT64:
-			var b [8]byte
-			binary.LittleEndian.AppendUint64(b[:], uint64(val.I64))
-			out = append(out, b[:]...)
-
-		// | size | str |
-		// |  4B  | ... |
-		case TYPE_BYTES:
-			var b [4]byte
-			binary.LittleEndian.PutUint32(b[:], uint32(len(val.Str)))
-			out = append(out, b[:]...)
-			out = append(out, val.Str...)
-		default:
-			panic(fmt.Errorf("encodeValues: unknown type %d", val.Type))
-		}
-	}
-	return out
-}
-
-func decodeValues(in []byte, out []Value) {
-	offset := 0
-	for i, val := range out {
-		switch val.Type {
-		case TYPE_INT64:
-			out[i].I64 = int64(binary.LittleEndian.Uint64(in[offset:]))
-			offset += 8
-
-		// | size | str |
-		// |  4B  | ... |
-		case TYPE_BYTES:
-			str_len := binary.LittleEndian.Uint32(in[offset:])
-			offset += 4
-			out[i].Str = append([]byte{}, in[offset:offset+int(str_len)]...)
-			offset += int(str_len)
-		default:
-			panic(fmt.Errorf("encodeKey: unknown type %d", val.Type))
-		}
-	}
-}
+func decodeKey(in []byte, out []Value)

@@ -58,7 +58,7 @@ func (db *KV) Del(key []byte) (bool, error) {
 	return deleted, updateOrRevert(db, meta)
 }
 
-func (db *KV) Update(req btree.UpdateReq) (bool, error) {
+func (db *KV) Update(req *btree.UpdateReq) (bool, error) {
 	if req.Key == nil {
 		return false, fmt.Errorf("Update: no key provided")
 	}

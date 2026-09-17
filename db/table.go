@@ -3,27 +3,25 @@ package db
 import "encoding/json"
 
 type TableDef struct {
-	Name   string
-	Types  []uint32
-	Cols   []string
-	PKeys  int
-	Prefix uint32
+	Name     string
+	Types    []uint32
+	Cols     []string
+	Indexes  [][]string
+	Prefixes []uint32
 }
 
 var TDEF_META = &TableDef{
-	Prefix: 1,
-	Name:   "@meta",
-	Types:  []uint32{TYPE_BYTES, TYPE_BYTES},
-	Cols:   []string{"key", "val"},
-	PKeys:  1,
+	Prefixes: []uint32{1},
+	Name:     "@meta",
+	Types:    []uint32{TYPE_BYTES, TYPE_BYTES},
+	Cols:     []string{"key", "val"},
 }
 
 var TDEF_TABLE = &TableDef{
-	Prefix: 2,
-	Name:   "@table",
-	Types:  []uint32{TYPE_BYTES, TYPE_BYTES},
-	Cols:   []string{"name", "def"},
-	PKeys:  1,
+	Prefixes: []uint32{2},
+	Name:     "@table",
+	Types:    []uint32{TYPE_BYTES, TYPE_BYTES},
+	Cols:     []string{"name", "def"},
 }
 
 func getTableDef(db *DB, name string) *TableDef {
