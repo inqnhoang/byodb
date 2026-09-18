@@ -18,6 +18,10 @@ type DB struct {
 	kv   kv.KV
 }
 
+// -----======================------
+// ---=====  Get, Set, Del  =====---
+// -----======================------
+
 // primary keys are filled in rec
 func dbGet(db *DB, tdef *TableDef, rec *Record) (bool, error) {
 	nPkeys := len(tdef.Indexes[0])
@@ -117,4 +121,13 @@ func (db *DB) Upsert(table string, rec *Record) (bool, error) {
 	return dbUpdate(db, tdef, rec, btree.MODE_UPSERT)
 }
 
+// TODO
 func (db *DB) Scan(table string, req *Scanner) error
+
+// -----=====================------
+// ---=====  Transactions  =====---
+// -----=====================------
+
+func (db *DB) Begin(tx *DBTX)
+func (db *DB) Commit(tx *DBTX) error
+func (db *DB) Abort(tx *DBTX)

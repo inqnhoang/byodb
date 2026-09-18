@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"sync"
 	"syscall"
 
 	"github.com/inqnhoang/byodb/engine/btree"
@@ -19,7 +20,7 @@ func assert(cond bool, caller string) {
 }
 
 // -----=================-----
-// ---=====  KvStore  =====---
+// ---=====  KVStore  =====---
 // -----=================-----
 
 type KV struct {
@@ -37,9 +38,16 @@ type KV struct {
 		flushed uint64            // # of pages flushed to disk
 		temp    [][]byte          // pages queue
 		updates map[uint64][]byte // pending updates
+		nappend int
 	}
 
-	failed bool // Did last update fail?
+	version uint64
+	failed  bool // Did last update fail?
+	ongoing []int64
+
+	history []CommitedTX
+
+	mutex sync.Mutex
 }
 
 func (db *KV) Get(key []byte) ([]byte, bool) {
@@ -58,6 +66,50 @@ func (db *KV) Del(key []byte) (bool, error) {
 	return deleted, updateOrRevert(db, meta)
 }
 
+func (kv *KV) Begin(tx *KVTX) {
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+
+	tx.db = kv
+	tx.meta = saveMeta(tx.db)
+
+	tx.snapshot.SetRoot(kv.tree.GetRoot())
+	// tx.snapshot.Get(..)
+
+	pages := [][]byte(nil)
+	tx.pending.SetGet(func(ptr uint64) []byte {
+		return pages[ptr-1]
+	})
+	tx.pending.SetNew(func(node []byte) uint64 {
+		pages = append(pages, node)
+		return uint64(len(pages))
+	})
+	tx.pending.SetDel(func(uint64) {})
+}
+
+func (kv *KV) Commit(tx *KVTX) error {
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+
+	if err := updateOrRevert(tx.db, tx.meta); err != nil {
+		return err
+	}
+	// TODO
+	// if len(writes) > 0 {
+	// 	kv.history = append(kv.history, CommitedTX{kv.version, writes})
+	// }
+	return nil
+}
+
+func (kv *KV) Abort(tx *KVTX) {
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+
+	loadMeta(tx.db, tx.meta)
+	tx.db.page.nappend = 0
+	tx.db.page.updates = map[uint64][]byte{}
+}
+
 func (db *KV) Update(req *btree.UpdateReq) (bool, error) {
 	if req.Key == nil {
 		return false, fmt.Errorf("Update: no key provided")
@@ -68,6 +120,19 @@ func (db *KV) Update(req *btree.UpdateReq) (bool, error) {
 	}
 	return true, nil
 }
+
+// TODO
+// func detectConflicts(kv *KV, tx *KVTX) bool {
+// 	for i := len(kv.history) - 1; i >= 0; i-- {
+// 		if !versionBefore(tx.version, kv.history[i].version) {
+// 			break
+// 		}
+// 		if rangesOverlap(tx.reads, kv.history[i].writes) {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 // -----==============-----
 // ---=====  Mmap  =====---

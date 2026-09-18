@@ -18,6 +18,8 @@ type FreeList struct {
 	tailSeq  uint64
 
 	maxSeq uint64
+	maxVer uint64
+	curVer uint64
 }
 
 func seq2idx(seq uint64) int {

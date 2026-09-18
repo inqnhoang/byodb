@@ -1,5 +1,9 @@
 package btree
 
+// -----===============-----
+// ---=====  BIter  =====---
+// -----===============-----
+
 type BIter struct {
 	tree *BTree
 	path []BNode
@@ -60,4 +64,13 @@ func iterNext(iter *BIter, level int) {
 		iter.path[level+1] = kid
 		iter.pos[level+1] = 0
 	}
+}
+
+// -----======================-----
+// ---=====  CombinedIter  =====---
+// -----======================-----
+
+type CombinedIter struct {
+	top *BIter
+	bot *BIter
 }
